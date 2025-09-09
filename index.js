@@ -2,15 +2,12 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import readline from 'readline';
-
-
 import { initBrowser, shutdownBrowser } from './src/browser/browser.js';
 import apiRoutes from './src/api/routes.js';
 import { getAvailableModelsFromFile, getApiKeys } from './src/api/chat.js';
 import { initHistoryDirectory } from './src/api/chatHistory.js';
 import { loadTokens } from './src/api/tokenManager.js';
-import { interactiveAccountMenu, addAccountInteractive } from './src/utils/accountSetup.js';
+import { addAccountInteractive } from './src/utils/accountSetup.js';
 import { logHttpRequest, logInfo, logError, logWarn } from './src/logger/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -19,13 +16,6 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = 3264;
-
-function prompt(question) {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    return new Promise(res => rl.question(question, ans => { rl.close(); res(ans.trim()); }));
-}
-
-let rl = null;
 
 // Middleware для логирования HTTP-запросов
 app.use(logHttpRequest);
@@ -43,6 +33,14 @@ app.use((req, res, next) => {
     }
 
     next();
+});
+
+// Обслуживание статических файлов из папки 'public'
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Маршрут для главного UI
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.use('/api', apiRoutes);
@@ -90,45 +88,6 @@ async function startServer() {
     logInfo('Запуск сервера...');
 
     initHistoryDirectory();
-
-    // Меню управления аккаунтами перед запуском прокси
-    while (true) {
-        const tokens = loadTokens();
-        console.log('\nСписок аккаунтов:');
-        if (!tokens.length) {
-            console.log('  (пусто)');
-        } else {
-            tokens.forEach((t, i) => {
-                let status = '✅ OK';
-                const now = Date.now();
-                if (t.invalid) status = '❌ INVALID';
-                else if (t.resetAt && new Date(t.resetAt).getTime() > now) status = '⏳ WAIT';
-                console.log(`${String(i + 1).padStart(2, ' ')} | ${t.id} | ${status}`);
-            });
-        }
-        console.log('\n=== Меню ===');
-        console.log('1 - Добавить новый аккаунт');
-        console.log('2 - Перелогинить аккаунт с истекшим токеном');
-        console.log('3 - Запустить прокси (по умолчанию)');
-        console.log('4 - Удалить аккаунт');
-        let choice = await prompt('Ваш выбор (Enter = 3): ');
-        if (!choice) choice = '3';
-        if (choice === '1') {
-            await addAccountInteractive();
-        } else if (choice === '2') {
-            const { reloginAccountInteractive } = await import('./src/utils/accountSetup.js');
-            await reloginAccountInteractive();
-        } else if (choice === '3') {
-            if (!tokens.length || !loadTokens().some(t => !t.invalid)) {
-                console.log('Нужен хотя бы один валидный аккаунт для запуска.');
-                continue;
-            }
-            break;
-        } else if (choice === '4') {
-            const { removeAccountInteractive } = await import('./src/utils/accountSetup.js');
-            await removeAccountInteractive();
-        }
-    }
 
     //=====================================================================================================
     //const sim = await prompt('Смоделировать ошибку RateLimited для первого запроса? (y/N): ');

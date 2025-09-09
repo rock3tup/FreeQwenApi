@@ -12,8 +12,9 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { listTokens, markInvalid, markRateLimited, markValid } from './tokenManager.js';
+import { listTokens, markInvalid, markRateLimited, markValid, removeToken } from './tokenManager.js';
 import { testToken } from './chat.js';
+import { addAccountInteractive, reloginAccount, removeAccount } from '../utils/accountSetup.js';
 
 const router = express.Router();
 
@@ -192,62 +193,65 @@ router.get('/models', async (req, res) => {
 });
 
 
-router.get('/status', async (req, res) => {
+router.get('/accounts', async (req, res) => {
     try {
-        logInfo('Запрос статуса авторизации');
-
-
+        logInfo('Запрос списка аккаунтов');
         const tokens = listTokens();
         const accounts = await Promise.all(tokens.map(async t => {
             const accInfo = { id: t.id, status: 'UNKNOWN', resetAt: t.resetAt || null };
-
-            if (t.resetAt) {
-                const resetTime = new Date(t.resetAt).getTime();
-                if (resetTime > Date.now()) {
-                    accInfo.status = 'WAIT';
-                    return accInfo;
-                }
-            }
-
-            const testResult = await testToken(t.token);
-            if (testResult === 'OK') {
-                accInfo.status = 'OK';
-                if (t.invalid || t.resetAt) markValid(t.id);
-            } else if (testResult === 'RATELIMIT') {
-                accInfo.status = 'WAIT';
-                markRateLimited(t.id, 24);
-            } else if (testResult === 'UNAUTHORIZED') {
+            if (t.invalid) {
                 accInfo.status = 'INVALID';
-                if (!t.invalid) markInvalid(t.id);
+            } else if (t.resetAt && new Date(t.resetAt).getTime() > Date.now()) {
+                accInfo.status = 'WAIT';
             } else {
-                accInfo.status = 'ERROR';
+                // To avoid spamming Qwen servers, we don't check valid tokens on every request.
+                // The UI can trigger a check if needed. For now, assume OK if not invalid or waiting.
+                accInfo.status = 'OK';
             }
             return accInfo;
         }));
-
-        const browserContext = getBrowserContext();
-        if (!browserContext) {
-            logError('Браузер не инициализирован');
-            return res.json({ authenticated: false, message: 'Браузер не инициализирован', accounts });
-        }
-
-        if (getAuthenticationStatus()) {
-            return res.json({
-                accounts
-            });
-        }
-
-        await checkAuthentication(browserContext);
-        const isAuthenticated = getAuthenticationStatus();
-        logInfo(`Статус авторизации: ${isAuthenticated ? 'активна' : 'требуется авторизация'}`);
-
-        res.json({
-            authenticated: isAuthenticated,
-            message: isAuthenticated ? 'Авторизация активна' : 'Требуется авторизация',
-            accounts
-        });
+        res.json({ accounts });
     } catch (error) {
-        logError('Ошибка при проверке статуса авторизации', error);
+        logError('Ошибка при получении списка аккаунтов', error);
+        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+    }
+});
+
+router.post('/accounts/add', async (req, res) => {
+    try {
+        logInfo('Запрос на добавление нового аккаунта');
+        const accountId = await addAccountInteractive();
+        if (accountId) {
+            res.json({ success: true, accountId });
+        } else {
+            res.status(500).json({ error: 'Не удалось добавить аккаунт' });
+        }
+    } catch (error) {
+        logError('Ошибка при добавлении аккаунта', error);
+        res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+    }
+});
+
+router.post('/accounts/relogin/:accountId', async (req, res) => {
+    try {
+        const { accountId } = req.params;
+        logInfo(`Запрос на повторный вход для аккаунта: ${accountId}`);
+        const result = await reloginAccount(accountId);
+        res.json(result);
+    } catch (error) {
+        logError(`Ошибка при повторном входе для аккаунта ${req.params.accountId}`, error);
+        res.status(500).json({ error: error.message || 'Внутренняя ошибка сервера' });
+    }
+});
+
+router.delete('/accounts/:accountId', (req, res) => {
+    try {
+        const { accountId } = req.params;
+        logInfo(`Запрос на удаление аккаунта: ${accountId}`);
+        removeAccount(accountId);
+        res.json({ success: true, accountId });
+    } catch (error) {
+        logError(`Ошибка при удалении аккаунта ${req.params.accountId}`, error);
         res.status(500).json({ error: 'Внутренняя ошибка сервера' });
     }
 });

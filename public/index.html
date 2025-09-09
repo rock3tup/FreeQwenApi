@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Qwen API Proxy</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Qwen API Proxy</h1>
+            <div class="controls">
+                <select id="model-select"></select>
+                <button id="new-chat-btn">Новый чат</button>
+                <button id="settings-btn">⚙️</button>
+            </div>
+        </header>
+        <div class="chat-container">
+            <div id="chat-list-container">
+                <h2>Чаты</h2>
+                <ul id="chat-list"></ul>
+            </div>
+            <div id="chat-window">
+                <div id="messages"></div>
+                <div id="input-area">
+                    <textarea id="message-input" placeholder="Введите ваше сообщение..."></textarea>
+                    <button id="send-btn">Отправить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h2>Управление аккаунтами</h2>
+            <div id="account-list">
+                <!-- Account items will be injected here by JS -->
+            </div>
+            <button id="add-account-btn">Добавить новый аккаунт</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

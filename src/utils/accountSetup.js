@@ -151,14 +151,43 @@ export async function removeAccountInteractive() {
     const confirm = await prompt(`Точно удалить ${acc.id}? (y/N): `);
     if (confirm.toLowerCase() !== 'y') return;
 
-    removeToken(acc.id);
-
-    // удалить директорию аккаунта
-    const dir = path.join(__dirname, '..', '..', 'session', 'accounts', acc.id);
-    if (fs.existsSync(dir)) {
-        fs.rmSync(dir, { recursive: true, force: true });
-    }
+    removeAccount(acc.id);
 
     console.log(`Аккаунт ${acc.id} удалён.`);
     await prompt('ENTER чтобы вернуться...');
+}
+
+export function removeAccount(accountId) {
+    removeToken(accountId);
+    const dir = path.join(__dirname, '..', '..', 'session', 'accounts', accountId);
+    if (fs.existsSync(dir)) {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+}
+
+export async function reloginAccount(accountId) {
+    const tokens = loadTokens();
+    const account = tokens.find(t => t.id === accountId);
+    if (!account) {
+        throw new Error('Аккаунт не найден');
+    }
+
+    console.log(`\nПовторная авторизация для ${account.id}`);
+    const ok = await initBrowser(true, true);
+    if (!ok) {
+        throw new Error('Не удалось запустить браузер');
+    }
+
+    const token = await extractAuthToken(getBrowserContext(), true);
+    await shutdownBrowser();
+
+    if (!token) {
+        throw new Error('Не удалось извлечь токен');
+    }
+
+    markValid(account.id, token);
+    fs.writeFileSync(path.join(__dirname, '..', '..', 'session', 'accounts', account.id, 'token.txt'), token, 'utf8');
+
+    console.log(`Токен обновлён для ${account.id}`);
+    return { success: true, accountId: account.id };
 } 

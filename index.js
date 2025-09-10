@@ -91,42 +91,52 @@ async function startServer() {
 
     initHistoryDirectory();
 
-    // Меню управления аккаунтами перед запуском прокси
-    while (true) {
+    const autostart = process.argv.includes('--autostart');
+
+    if (autostart) {
+        logInfo('Обнаружен флаг --autostart, запуск в неинтерактивном режиме...');
         const tokens = loadTokens();
-        console.log('\nСписок аккаунтов:');
-        if (!tokens.length) {
-            console.log('  (пусто)');
-        } else {
-            tokens.forEach((t, i) => {
-                let status = '✅ OK';
-                const now = Date.now();
-                if (t.invalid) status = '❌ INVALID';
-                else if (t.resetAt && new Date(t.resetAt).getTime() > now) status = '⏳ WAIT';
-                console.log(`${String(i + 1).padStart(2, ' ')} | ${t.id} | ${status}`);
-            });
+        if (!tokens.length || !tokens.some(t => !t.invalid)) {
+            logError('Для автоматического запуска нужен хотя бы один валидный аккаунт. Пожалуйста, запустите программу в интерактивном режиме, чтобы добавить аккаунт.');
+            process.exit(1);
         }
-        console.log('\n=== Меню ===');
-        console.log('1 - Добавить новый аккаунт');
-        console.log('2 - Перелогинить аккаунт с истекшим токеном');
-        console.log('3 - Запустить прокси (по умолчанию)');
-        console.log('4 - Удалить аккаунт');
-        let choice = await prompt('Ваш выбор (Enter = 3): ');
-        if (!choice) choice = '3';
-        if (choice === '1') {
-            await addAccountInteractive();
-        } else if (choice === '2') {
-            const { reloginAccountInteractive } = await import('./src/utils/accountSetup.js');
-            await reloginAccountInteractive();
-        } else if (choice === '3') {
-            if (!tokens.length || !loadTokens().some(t => !t.invalid)) {
-                console.log('Нужен хотя бы один валидный аккаунт для запуска.');
-                continue;
+    } else {
+        while (true) {
+            const tokens = loadTokens();
+            console.log('\nСписок аккаунтов:');
+            if (!tokens.length) {
+            console.log('  (пусто)');
+            } else {
+                tokens.forEach((t, i) => {
+                    let status = '✅ OK';
+                    const now = Date.now();
+                    if (t.invalid) status = '❌ INVALID';
+                    else if (t.resetAt && new Date(t.resetAt).getTime() > now) status = '⏳ WAIT';
+                    console.log(`${String(i + 1).padStart(2, ' ')} | ${t.id} | ${status}`);
+                });
             }
-            break;
-        } else if (choice === '4') {
-            const { removeAccountInteractive } = await import('./src/utils/accountSetup.js');
-            await removeAccountInteractive();
+            console.log('\n=== Меню ===');
+            console.log('1 - Добавить новый аккаунт');
+            console.log('2 - Перелогинить аккаунт с истекшим токеном');
+            console.log('3 - Запустить прокси (по умолчанию)');
+            console.log('4 - Удалить аккаунт');
+            let choice = await prompt('Ваш выбор (Enter = 3): ');
+            if (!choice) choice = '3';
+            if (choice === '1') {
+                await addAccountInteractive();
+            } else if (choice === '2') {
+                const { reloginAccountInteractive } = await import('./src/utils/accountSetup.js');
+                await reloginAccountInteractive();
+            } else if (choice === '3') {
+                if (!tokens.length || !loadTokens().some(t => !t.invalid)) {
+                    console.log('Нужен хотя бы один валидный аккаунт для запуска.');
+                    continue;
+                }
+                break;
+            } else if (choice === '4') {
+                const { removeAccountInteractive } = await import('./src/utils/accountSetup.js');
+                await removeAccountInteractive();
+            }
         }
     }
 
